@@ -2627,6 +2627,20 @@ select.inp { cursor: pointer; }
     <button class="btn btn-primary" style="width:100%" onclick="sauvegarderProfil()">Sauvegarder le profil</button>
     <div id="profil-ok" style="display:none;text-align:center;margin-top:.5rem;font-size:12px;color:var(--accent2);font-weight:600">✓ Profil sauvegardé</div>
 
+    <!-- Sauvegarde / Restauration -->
+    <div class="card" style="margin-top:1rem">
+      <div class="card-head"><div class="card-title">💾 Sauvegarde de mes données</div></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:.75rem">Toutes vos données sont stockées dans votre navigateur. <strong>Exportez-les régulièrement</strong> pour éviter de les perdre.</p>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <button class="btn btn-primary" style="flex:1;min-width:140px" onclick="exporterDonnees()">📤 Exporter mes données</button>
+          <button class="btn btn-ghost" style="flex:1;min-width:140px" onclick="el('importFileInput').click()">📥 Restaurer une sauvegarde</button>
+          <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="importerDonnees(event)">
+        </div>
+        <div id="backup-msg" style="display:none;margin-top:.5rem;font-size:12px;font-weight:600"></div>
+      </div>
+    </div>
+
     <!-- Logo dans Profil -->
     <div class="card" style="margin-top:1rem">
       <div class="card-head"><div class="card-title">🖼️ Logo de l'entreprise</div></div>
@@ -2652,13 +2666,22 @@ select.inp { cursor: pointer; }
       <button class="btn btn-ghost btn-sm" onclick="nettoyerDocsExpires()">🗑️ Nettoyer expirés</button>
     </div>
 
+    <div style="margin-bottom:.75rem;position:relative">
+      <input type="text" id="docSearch" class="inp" placeholder="🔍 Rechercher un client, un numéro, un montant…" oninput="rechercherDocs()" style="padding-right:30px">
+      <button id="docSearchClear" onclick="effacerRecherche()" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;line-height:1">✕</button>
+    </div>
+
     <div class="doc-filters" id="docFilters">
       <button class="doc-filter-btn active" data-f="all" onclick="filtrerDocs('all',this)">Tous</button>
       <button class="doc-filter-btn" data-f="devis" onclick="filtrerDocs('devis',this)">Devis</button>
       <button class="doc-filter-btn" data-f="facture" onclick="filtrerDocs('facture',this)">Factures</button>
       <button class="doc-filter-btn" data-f="pending" onclick="filtrerDocs('pending',this)">En attente</button>
       <button class="doc-filter-btn" data-f="accepted" onclick="filtrerDocs('accepted',this)">Acceptés</button>
+      <button class="doc-filter-btn" data-f="paid" onclick="filtrerDocs('paid',this)">Payés</button>
+      <button class="doc-filter-btn" data-f="unpaid" onclick="filtrerDocs('unpaid',this)">Impayés</button>
     </div>
+
+    <div id="docCount" style="font-size:11px;color:var(--muted);margin-bottom:.5rem;text-align:right"></div>
 
     <div id="docList" class="doc-list">
       <div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;font-style:italic">Aucun document enregistré.<br>Générez un devis pour commencer.</div>
@@ -3386,16 +3409,34 @@ const METIERS = {
 // APPEL IA VIA PROXY BACKEND (la clé est cachée côté serveur)
 // ============================================================
 async function groqFetch(messages, max_tokens = 900) {
-  const res = await fetch('/api/groq', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ messages, max_tokens })
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message || 'Erreur IA');
-  return data.choices[0].message.content;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new Error('Pas de connexion internet. L\'IA est indisponible hors ligne.');
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 35000);
+  try {
+    const res = await fetch('/api/groq', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, max_tokens }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.status === 429) throw new Error('Trop de requêtes. Patientez une minute avant de réessayer.');
+    if (res.status === 504) throw new Error('L\'IA met trop de temps à répondre. Réessayez dans quelques secondes.');
+    if (res.status === 413) throw new Error('Votre message est trop long pour l\'IA. Essayez plus court.');
+    if (res.status >= 500) throw new Error('Serveur IA indisponible. Réessayez dans un instant.');
+    let data;
+    try { data = await res.json(); } catch (e) { throw new Error('Réponse IA invalide. Réessayez.'); }
+    if (data.error) throw new Error(data.error.message || 'Erreur IA');
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) throw new Error('Réponse IA vide. Réessayez.');
+    return data.choices[0].message.content;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') throw new Error('L\'IA n\'a pas répondu à temps (35s). Vérifiez votre connexion.');
+    if (err instanceof TypeError) throw new Error('Impossible de joindre le serveur. Vérifiez votre connexion internet.');
+    throw err;
+  }
 }
 
 // ============================================================
@@ -3446,6 +3487,59 @@ const store = {
   get: key => { try { const r = localStorage.getItem('dp_' + key); return r ? JSON.parse(r) : null; } catch { return null; } },
   set: (key, val) => { try { localStorage.setItem('dp_' + key, JSON.stringify(val)); } catch { } }
 };
+
+// ============================================================
+// EXPORT / IMPORT DES DONNÉES (sauvegarde locale)
+// ============================================================
+function exporterDonnees() {
+  try {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('dp_')) data[k] = localStorage.getItem(k);
+    }
+    const payload = { app: 'papote', version: 1, exportedAt: new Date().toISOString(), data: data };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    const stamp = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    a.href = url; a.download = `papote-backup-${stamp}.json`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    const msg = el('backup-msg');
+    if (msg) { msg.style.display='block'; msg.style.color='var(--accent2)'; msg.textContent='✓ Sauvegarde téléchargée (' + Object.keys(data).length + ' éléments)'; setTimeout(() => msg.style.display='none', 5000); }
+  } catch (e) {
+    const msg = el('backup-msg');
+    if (msg) { msg.style.display='block'; msg.style.color='var(--accent)'; msg.textContent='✗ Erreur : ' + e.message; }
+  }
+}
+
+function importerDonnees(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload || payload.app !== 'papote' || !payload.data) throw new Error('Fichier de sauvegarde invalide');
+      const nbKeys = Object.keys(payload.data).length;
+      if (!confirm(`Restaurer la sauvegarde ?\n\nContient ${nbKeys} éléments.\nDate : ${payload.exportedAt ? new Date(payload.exportedAt).toLocaleString('fr-FR') : 'inconnue'}\n\n⚠ Vos données actuelles seront remplacées.`)) { event.target.value=''; return; }
+      const toDelete = [];
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('dp_')) toDelete.push(k); }
+      toDelete.forEach(k => localStorage.removeItem(k));
+      for (const [key, value] of Object.entries(payload.data)) { if (key.startsWith('dp_')) localStorage.setItem(key, value); }
+      const msg = el('backup-msg');
+      if (msg) { msg.style.display='block'; msg.style.color='var(--accent2)'; msg.textContent='✓ Sauvegarde restaurée. Rechargement…'; }
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      const msg = el('backup-msg');
+      if (msg) { msg.style.display='block'; msg.style.color='var(--accent)'; msg.textContent='✗ Erreur : ' + err.message; }
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
 
 // ============================================================
 // SÉLECTION MÉTIER
@@ -4261,9 +4355,6 @@ function afficherMentionModal(titre, contenu) {
   el('docModal').classList.add('show');
 }
 
-// Ajouter offres à la navigation
-const PAGE_ORDER_UPDATED = ['document','devis','factures','historique','agenda','envoi','layout','profil','offres'];
-
 function addRipple(e) {
   const btn = e.currentTarget;
   const rect = btn.getBoundingClientRect();
@@ -4289,7 +4380,7 @@ function initRipples() {
 // ============================================================
 // NAVIGATION AVEC SLIDE
 // ============================================================
-const PAGE_ORDER = ['document', 'devis', 'factures', 'historique', 'agenda', 'envoi', 'layout', 'profil'];
+const PAGE_ORDER = ['document', 'devis', 'factures', 'historique', 'agenda', 'envoi', 'layout', 'profil', 'offres'];
 let lastPageIndex = 0;
 
 function goPage(p) {
@@ -4770,10 +4861,14 @@ function agirSuggestion(idx) {
 // ENVOI
 // ============================================================
 function normaliserEmail(txt) {
+  if (!txt) return '';
   return txt.toLowerCase()
-    .replace(/\s*arobase\s*/g, '@').replace(/\s*point\s*/g, '.')
-    .replace(/\s*tiret\s*/g, '-').replace(/\s*underscore\s*|\s*souligné\s*/g, '_')
-    .replace(/\s*plus\s*/g, '+').replace(/\s+/g, '').trim();
+    .replace(/\s*(arrobase|arobase|arrobas|arobas|arrobe|arobe|a\s*commercial|\bat\b)\s*/g, '@')
+    .replace(/\s*(point|dot)\s*/g, '.')
+    .replace(/\s*(tiret|trait\s*d['']union|moins|dash)\s*/g, '-')
+    .replace(/\s*(underscore|souligné|soulignement|tiret\s*bas|tiret\s*du\s*bas)\s*/g, '_')
+    .replace(/\s*\bplus\b\s*/g, '+')
+    .replace(/\s+/g, '').trim();
 }
 
 function lancerEnvoi(immediat = false) {
@@ -4819,9 +4914,27 @@ function clearSend() {
 }
 
 function confirmerEnvoi(mode) {
+  // Construction du lien mailto avec tout pré-rempli
+  const to = (v('e-email') || '').trim();
+  const subject = v('e-sujet') || ('Votre devis — ' + (v('p-nom') || 'Mon entreprise'));
+  const body = v('e-message') || '';
+
+  const mailtoUrl = 'mailto:' + encodeURIComponent(to)
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(body);
+
+  // Ouvre l'application email de l'utilisateur (Gmail, Outlook, Mail, etc.)
+  // via une ancre invisible pour une meilleure compatibilité navigateurs
+  const a = document.createElement('a');
+  a.href = mailtoUrl;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => document.body.removeChild(a), 100);
+
   ajouterHistorique(mode);
   afficherResultat('sent', mode);
-  feed('✓ Devis envoyé à ' + v('e-email') + (mode === 'immediate' ? ' (immédiat)' : ''), 'ok', 'envoi');
+  feed('✓ Votre messagerie s\'est ouverte — cliquez sur Envoyer pour finaliser', 'ok', 'envoi');
 }
 
 function afficherResultat(type, mode = '') {
@@ -4829,11 +4942,9 @@ function afficherResultat(type, mode = '') {
   box.style.display = 'block';
   box.className = 'send-result ' + type;
   if (type === 'sent') {
-    el('sendIcon').textContent = '✅';
-    el('sendTitle').textContent = 'Devis envoyé';
-    el('sendMsg').textContent = mode === 'immediate'
-      ? 'Envoyé immédiatement à ' + v('e-email')
-      : 'Envoyé à ' + v('e-email') + ' après le délai de vérification.';
+    el('sendIcon').textContent = '📧';
+    el('sendTitle').textContent = 'Email prêt à envoyer';
+    el('sendMsg').textContent = 'Votre messagerie s\'est ouverte avec un email prêt pour ' + v('e-email') + '. Il ne vous reste plus qu\'à cliquer sur "Envoyer" dans votre application email.';
   } else {
     el('sendIcon').textContent = '🚫';
     el('sendTitle').textContent = 'Envoi annulé';
@@ -4996,10 +5107,29 @@ function renderDocList(filter) {
   else if (filter === 'facture') filtered = valid.filter(d => d.type === 'facture');
   else if (filter === 'pending') filtered = valid.filter(d => d.status === 'pending');
   else if (filter === 'accepted') filtered = valid.filter(d => d.status === 'accepted');
+  else if (filter === 'paid') filtered = valid.filter(d => d.status === 'paid');
+  else if (filter === 'unpaid') filtered = valid.filter(d => d.status === 'unpaid' || d.status === 'late');
+
+  const searchInput = el('docSearch');
+  const q = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  if (q) {
+    filtered = filtered.filter(d => {
+      return (d.client && d.client.toLowerCase().includes(q))
+        || (d.num && d.num.toLowerCase().includes(q))
+        || (d.desc && d.desc.toLowerCase().includes(q))
+        || (d.objet && d.objet.toLowerCase().includes(q))
+        || (d.totalTTC && String(Math.round(d.totalTTC)).includes(q))
+        || (d.adresse && d.adresse.toLowerCase().includes(q));
+    });
+  }
+
+  const countEl = el('docCount');
+  if (countEl) countEl.textContent = filtered.length === 0 ? '' : (filtered.length === 1 ? '1 résultat' : filtered.length + ' résultats');
 
   const container = el('docList');
   if (!filtered.length) {
-    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;font-style:italic">Aucun document dans cette catégorie.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;font-style:italic">' +
+      (q ? 'Aucun résultat pour « ' + q + ' ».' : 'Aucun document dans cette catégorie.') + '</div>';
     return;
   }
 
@@ -5038,6 +5168,21 @@ function filtrerDocs(filter, btn) {
   document.querySelectorAll('.doc-filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderDocList(filter);
+}
+
+function rechercherDocs() {
+  const input = el('docSearch');
+  const clearBtn = el('docSearchClear');
+  if (clearBtn) clearBtn.style.display = (input && input.value) ? 'block' : 'none';
+  renderDocList(docFilter || 'all');
+}
+
+function effacerRecherche() {
+  const input = el('docSearch');
+  if (input) input.value = '';
+  const clearBtn = el('docSearchClear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  renderDocList(docFilter || 'all');
 }
 
 function nettoyerDocsExpires() {
@@ -6128,30 +6273,4 @@ function sauvegarderSetup() {
     taux: el('sp-taux').value,
     'taux-maj': el('sp-taux-maj').value,
     'taux-uo': el('sp-taux-uo').value,
-    marge: el('sp-marge').value,
-    km: el('sp-km').value,
-    forfait: el('sp-forfait').value,
-    rayon: el('sp-rayon').value,
-    validite: el('sp-validite').value || '30',
-    paiement: el('sp-paiement').value,
-    assurance: el('sp-assurance').value,
-    pied: el('sp-pied').value,
-    web: el('sp-web').value,
-    hdebut: el('sp-hdebut').value,
-    hfin: el('sp-hfin').value,
-    tva_defaut: tva,
-    couleur: setupCouleur,
-    metier: cfg.nom,
-  };
-  store.set('profil_' + metier, profil);
-  // Jours
-  joursOn = setupJoursOn.slice();
-  store.set('jours', joursOn);
-  // Synchroniser champs profil page
-  Object.keys(profil).forEach(k => { const e = el('p-' + k.replace('-','.')); if (e) e.value = profil[k]; });
-}
-
-</script>
-
-</body>
-</html>
+    marge: el('sp-mar
