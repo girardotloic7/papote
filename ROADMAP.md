@@ -32,6 +32,36 @@
 - Modifs sur `index.html` et `ROADMAP.md`
 - Commit suggéré : `Tableau de bord : page d'accueil avec stats temps réel`
 
+### 🎤 Migration vers Whisper (25/04 — refonte complète du micro)
+
+**Problème de fond :** sur iPhone Safari, la Web Speech API du navigateur a deux permissions séparées (getUserMedia + SpeechRecognition) et iOS demande l'autorisation à chaque appel. Impossible à corriger côté code, c'est un comportement Apple.
+
+**Solution :** abandonner la reconnaissance vocale du navigateur et basculer vers **Whisper via Groq** (déjà branché pour le LLM, free tier).
+
+**Changements :**
+- Nouveau endpoint serveur `api/whisper.js` :
+  - Reçoit l'audio en base64 du client
+  - Forward à Groq Whisper (`whisper-large-v3`, langue fr)
+  - Rate limiting (30 req/min), timeout 30s, taille max 3 MB
+- Frontend `index.html` :
+  - Suppression complète de `SpeechRecognition` / `webkitSpeechRecognition`
+  - Suppression de `recog`, `finalTxt`, `fieldRecog`
+  - Nouveau système basé sur `MediaRecorder` :
+    - Détecte le bon mimeType selon le navigateur (`audio/webm` Chrome, `audio/mp4` iOS Safari)
+    - Enregistre pendant l'appui, puis envoie à `/api/whisper` au relâchement
+    - Mode verrouillé (1 sec hold) toujours disponible, jusqu'à 60s d'enregistrement
+    - Fonction `transcribeAudio(blob, mimeType)` partagée
+  - Refonte de `microChamp` (micro pour les champs email) sur le même modèle
+
+**Avantages :**
+- ✅ Marche identiquement sur Android Chrome, iPhone Safari, iPhone Chrome, Firefox, Brave, desktop
+- ✅ Une seule autorisation micro suffit (plus de re-demandes Apple)
+- ✅ Précision Whisper > reconnaissance navigateur (gère mieux accents, jargon métier)
+
+**Compromis :**
+- Latence ~1 sec après lâcher du micro (le temps de transcrire)
+- Nécessite internet (déjà nécessaire pour le LLM, donc pas une régression)
+
 ### 🎤 Expérience micro améliorée (25/04 — bonus iPhone)
 
 **Problème détecté en test sur iPhone :** le code disait "Autorisez le micro dans Chrome" même sur Safari iOS, et iOS ne demandait pas la permission micro de façon claire.
@@ -202,3 +232,4 @@ Toutes préfixées `dp_` (pour "devis papote").
 |---|---|---|
 | 21/04/2026 | ~4h | Sécurisation clé API + email mailto + backup + recherche + hardening + setup workflow GitHub Desktop. Dashboard reporté à la prochaine session. |
 | 25/04/2026 | ~2h | Tableau de bord + numérotation personnalisable + tooltips d'aide + correction fichier tronqué |
+| 25/04/2026 | ~1h | Migration micro : Whisper via Groq (remplace Web Speech API, marche partout) |

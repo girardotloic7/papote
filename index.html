@@ -3727,12 +3727,15 @@ let sendInterval = null;
 let sendStart = null;
 const DELAI_ENVOI = 60; // secondes
 
-// Micro
+// Micro (MediaRecorder + Whisper via /api/whisper)
 let micState = 'idle';
-let recog = null;
-let finalTxt = '';
+let recorder = null;            // MediaRecorder courant pour le micro principal
+let recorderChunks = [];
+let recorderStream = null;
+let recorderMime = '';
 let holdTimer = null;
 const LOCK_MS = 900;
+const MAX_RECORD_MS = 60000;    // sécurité : on coupe au bout d'1 minute
 
 // ============================================================
 // HELPERS
@@ -6383,24 +6386,66 @@ async function appliquer(result, zone = 'document') {
 // ============================================================
 // MICRO PAR CHAMP (email)
 // ============================================================
-let fieldRecog = null, fieldRecActive = null;
-function microChamp(inputId, btnId, mode) {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { showMicHelp('not-supported'); return; }
-  if (fieldRecActive === btnId) { if (fieldRecog) fieldRecog.stop(); return; }
-  if (fieldRecog) fieldRecog.stop();
-  fieldRecActive = btnId;
+let fieldRecorder = null, fieldRecorderStream = null, fieldRecorderChunks = [], fieldRecorderMime = '', fieldRecorderTarget = null;
+async function microChamp(inputId, btnId, mode) {
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showMicHelp('not-supported');
+    return;
+  }
+  // Si actif sur ce bouton → arrêter (toggle)
+  if (fieldRecorder && fieldRecorder.state === 'recording' && fieldRecorderTarget === btnId) {
+    try { fieldRecorder.stop(); } catch(e) {}
+    return;
+  }
+  // Si actif ailleurs → couper d'abord
+  if (fieldRecorder && fieldRecorder.state === 'recording') {
+    try { fieldRecorder.stop(); } catch(e) {}
+  }
   document.querySelectorAll('.btn-icon').forEach(b => b.classList.remove('rec'));
   el(btnId).classList.add('rec');
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  fieldRecog = new SR(); fieldRecog.lang = 'fr-FR'; fieldRecog.continuous = false; fieldRecog.interimResults = false;
-  fieldRecog.onresult = e => {
-    let txt = e.results[0][0].transcript.trim();
-    if (mode === 'email') txt = normaliserEmail(txt);
-    el(inputId).value = txt; flash(inputId);
-    feed('✓ ' + inputId + ' : ' + txt, 'ok', 'envoi');
-  };
-  fieldRecog.onend = () => { fieldRecActive = null; el(btnId).classList.remove('rec'); };
-  fieldRecog.start();
+  fieldRecorderTarget = btnId;
+
+  try {
+    fieldRecorderStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    fieldRecorderMime = getBestAudioMimeType();
+    fieldRecorder = new MediaRecorder(fieldRecorderStream, fieldRecorderMime ? { mimeType: fieldRecorderMime } : undefined);
+    fieldRecorderChunks = [];
+
+    fieldRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) fieldRecorderChunks.push(e.data); };
+
+    fieldRecorder.onstop = async () => {
+      const blob = new Blob(fieldRecorderChunks, { type: fieldRecorderMime || 'audio/webm' });
+      try { fieldRecorderStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+      fieldRecorderStream = null;
+      fieldRecorder = null;
+      fieldRecorderChunks = [];
+      el(btnId).classList.remove('rec');
+      fieldRecorderTarget = null;
+
+      if (blob.size < 800) return;
+
+      try {
+        let txt = await transcribeAudio(blob, fieldRecorderMime);
+        if (!txt || !txt.trim()) { feed('⚠ Rien capté — réessaie en parlant plus fort', 'warn', 'envoi'); return; }
+        txt = txt.trim();
+        if (mode === 'email') txt = normaliserEmail(txt);
+        el(inputId).value = txt; flash(inputId);
+        feed('✓ ' + inputId + ' : ' + txt, 'ok', 'envoi');
+      } catch (err) {
+        feed('Erreur transcription : ' + (err.message || 'connexion'), 'warn', 'envoi');
+      }
+    };
+
+    fieldRecorder.start();
+    // Sécurité : on coupe au bout de 30s pour les champs courts
+    setTimeout(() => { if (fieldRecorder && fieldRecorder.state === 'recording') { try { fieldRecorder.stop(); } catch(e) {} } }, 30000);
+  } catch (err) {
+    el(btnId).classList.remove('rec');
+    fieldRecorderTarget = null;
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') showMicHelp('denied');
+    else if (err.name === 'NotFoundError') feed('⚠ Aucun micro détecté', 'warn', 'envoi');
+    else feed('⚠ Erreur micro : ' + (err.message || err.name), 'warn', 'envoi');
+  }
 }
 
 // ============================================================
@@ -6422,8 +6467,7 @@ function pUp(e) {
   if (micState === 'locked') { stopAndProcess(); return; }
   clearTimeout(holdTimer); cancelLockRing();
   if (micState === 'listening') {
-    if (recog) { try { recog.stop(); } catch(err) {} }
-    // onend s'occupe du reste
+    stopAndProcess();
   }
 }
 
@@ -6552,11 +6596,7 @@ function closeMicHelp() {
 
 function testerMicro() {
   // Test explicite du micro déclenché par un clic utilisateur
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showMicHelp('not-supported');
-    return;
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showMicHelp('not-supported');
     return;
   }
@@ -6564,8 +6604,7 @@ function testerMicro() {
     .then(stream => {
       stream.getTracks().forEach(t => t.stop());
       window.__micGranted = true;
-      // Notification de succès
-      feed('✓ Micro autorisé et fonctionnel ! Appuie longuement sur le bouton micro pour parler.', 'ok', currentPage);
+      feed('✓ Micro autorisé ! Appuie longuement sur le gros bouton micro pour parler.', 'ok', currentPage);
     })
     .catch(err => {
       window.__micGranted = false;
@@ -6591,80 +6630,174 @@ function retryMicPermission() {
   }
 }
 
-function startListening() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showMicHelp('not-supported'); return;
+// ============================================================
+// MICRO PRINCIPAL — MediaRecorder + Whisper
+// ============================================================
+function getBestAudioMimeType() {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/wav'
+  ];
+  for (const m of candidates) {
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch(e) {}
   }
-  if (recog) { try { recog.abort(); } catch (e) {} recog = null; }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recog = new SR();
-  recog.lang = 'fr-FR';
-  recog.continuous = false;
-  recog.interimResults = true;
-  recog.maxAlternatives = 1;
-  finalTxt = '';
+  return '';
+}
 
-  recog.onstart = () => setMicState('listening');
+function cleanupRecorder() {
+  if (recorderStream) {
+    try { recorderStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+    recorderStream = null;
+  }
+  recorder = null;
+  recorderChunks = [];
+}
 
-  recog.onresult = e => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalTxt += e.results[i][0].transcript + ' ';
-      else interim += e.results[i][0].transcript;
-    }
-    el('micTxt').innerHTML = `<span style="color:var(--text)">${finalTxt}</span><span class="mic-interim">${interim}</span>`;
-  };
-
-  recog.onerror = e => {
-    console.warn('Micro erreur:', e.error);
-    if (e.error === 'no-speech') {
-      // Doigt encore appuyé → relancer silencieusement sans bip
-      if (micState === 'listening' || micState === 'locked') {
-        try { recog = null; startListening(); } catch(err) {}
-      }
-      return;
-    }
-    if (e.error === 'network') feed('⚠ Connexion internet requise pour la dictée', 'warn', currentPage);
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      feed('⚠ Permission micro refusée', 'warn', currentPage);
-      setTimeout(() => showMicHelp('denied'), 600);
-    }
-    if (e.error === 'audio-capture') feed('⚠ Aucun micro détecté sur l\'appareil', 'warn', currentPage);
+async function startListening() {
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showMicHelp('not-supported');
     setMicState('idle');
-  };
+    return;
+  }
+  // Si on a déjà un recorder actif, on l'arrête proprement
+  if (recorder && recorder.state === 'recording') {
+    try { recorder.stop(); } catch(e) {}
+    return;
+  }
 
-  recog.onend = () => {
-    if (micState === 'locked') {
-      // Mode verrouillé : traiter ce qu'on a
-      if (finalTxt.trim()) { stopAndProcess(); return; }
-      // Rien → relancer
-      try { recog = null; startListening(); } catch(err) { setMicState('idle'); }
-      return;
-    }
-    if (micState === 'listening') {
-      if (finalTxt.trim()) stopAndProcess();
-      else setMicState('idle');
-    }
-  };
+  try {
+    recorderStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorderMime = getBestAudioMimeType();
+    recorder = new MediaRecorder(recorderStream, recorderMime ? { mimeType: recorderMime } : undefined);
+    recorderChunks = [];
 
-  try { recog.start(); }
-  catch(e) { console.warn('recog.start error:', e); setMicState('idle'); }
+    recorder.ondataavailable = e => { if (e.data && e.data.size > 0) recorderChunks.push(e.data); };
+
+    recorder.onerror = e => {
+      console.warn('MediaRecorder error:', e);
+      cleanupRecorder();
+      setMicState('idle');
+    };
+
+    recorder.onstart = () => {
+      setMicState('listening');
+      el('micTxt').innerHTML = '<span style="color:var(--accent);font-style:italic">Écoute… parle naturellement</span>';
+    };
+
+    recorder.onstop = async () => {
+      const mime = recorderMime || 'audio/webm';
+      const blob = new Blob(recorderChunks, { type: mime });
+      cleanupRecorder();
+
+      // Audio trop court → ignore (probablement appui par erreur)
+      if (blob.size < 800) {
+        setMicState('idle');
+        return;
+      }
+
+      setMicState('processing');
+      el('micTxt').innerHTML = '<span style="color:var(--muted);font-style:italic">Transcription en cours…</span>';
+
+      let txt = '';
+      try {
+        txt = await transcribeAudio(blob, mime);
+      } catch (err) {
+        feed('Erreur transcription : ' + (err.message || 'connexion'), 'warn', currentPage);
+        setMicState('idle');
+        return;
+      }
+
+      if (!txt || !txt.trim()) {
+        el('micTxt').innerHTML = '<span class="mic-hint">Rien capté — réessaie en parlant plus fort</span>';
+        setMicState('idle');
+        return;
+      }
+
+      el('micTxt').innerHTML = `<span style="color:var(--muted);font-style:italic">"${txt.trim()}"</span>`;
+      try {
+        const r = await dispatchIA(txt.trim(), currentPage);
+        await appliquer(r, currentPage);
+      } catch (err) {
+        feed('Erreur IA : ' + (err.message || 'vérifiez votre connexion'), 'warn', currentPage);
+      }
+      setMicState('idle');
+    };
+
+    recorder.start();
+
+    // Sécurité : couper l'enregistrement à 1 minute max
+    setTimeout(() => {
+      if (recorder && recorder.state === 'recording') {
+        try { recorder.stop(); } catch(e) {}
+      }
+    }, MAX_RECORD_MS);
+
+  } catch (err) {
+    console.warn('startListening error:', err.name, err.message);
+    cleanupRecorder();
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      showMicHelp('denied');
+    } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      feed('⚠ Aucun micro détecté sur l\'appareil', 'warn', currentPage);
+    } else {
+      feed('⚠ Erreur micro : ' + (err.message || err.name), 'warn', currentPage);
+    }
+    setMicState('idle');
+  }
 }
 
 async function stopAndProcess() {
   clearTimeout(holdTimer); cancelLockRing();
-  if (recog) { try { recog.stop(); } catch (e) { } }
-  const txt = finalTxt.trim();
-  if (!txt) { setMicState('idle'); return; }
-  setMicState('processing');
-  el('micTxt').innerHTML = `<span style="color:var(--muted);font-style:italic">"${txt}"</span>`;
-  try {
-    const r = await dispatchIA(txt, currentPage);
-    await appliquer(r, currentPage);
-  } catch (err) {
-    feed('Erreur IA : ' + (err.message || 'vérifiez votre connexion'), 'warn', currentPage);
+  if (recorder && recorder.state === 'recording') {
+    try { recorder.stop(); } catch(e) { console.warn('recorder.stop error:', e); }
+    // Le handler onstop s'occupe de la transcription + dispatchIA
+  } else {
+    setMicState('idle');
   }
-  setMicState('idle');
+}
+
+// Helper : envoie un blob audio à /api/whisper et renvoie le texte
+async function transcribeAudio(blob, mimeType) {
+  // Convertir en base64
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = String(reader.result || '');
+      const idx = dataUrl.indexOf(',');
+      resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch('/api/whisper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audio: base64, mimeType: mimeType || 'audio/webm', language: 'fr' }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const msg = (data && data.error && data.error.message) || ('HTTP ' + response.status);
+      throw new Error(msg);
+    }
+    return (data && data.text) || '';
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') throw new Error('La transcription prend trop de temps');
+    throw err;
+  }
 }
 
 function setMicState(s) {
@@ -6692,7 +6825,7 @@ function setMicState(s) {
 // ============================================================
 async function simDevis(txt) {
   el('micTxt').innerHTML = `<span style="color:var(--text);font-style:italic">"${txt}"</span>`;
-  setMicState('processing'); finalTxt = txt;
+  setMicState('processing');
   try { const r = await dispatchIA(txt, 'document'); await appliquer(r, 'document'); }
   catch (e) { feed('Erreur : ' + e.message, 'warn', 'document'); }
   setMicState('idle');
@@ -6700,7 +6833,7 @@ async function simDevis(txt) {
 
 async function simEnvoi(txt) {
   el('micTxt').innerHTML = `<span style="color:var(--text);font-style:italic">"${txt}"</span>`;
-  setMicState('processing'); finalTxt = txt;
+  setMicState('processing');
   try { const r = await dispatchIA(txt, 'envoi'); await appliquer(r, 'envoi'); }
   catch (e) { feed('Erreur : ' + e.message, 'warn', 'envoi'); }
   setMicState('idle');
