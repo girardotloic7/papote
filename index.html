@@ -6571,4 +6571,30 @@ function sauvegarderSetup() {
     taux: el('sp-taux').value,
     'taux-maj': el('sp-taux-maj').value,
     'taux-uo': el('sp-taux-uo').value,
-    marge: el('sp-mar
+    marge: el('sp-marge').value,
+    km: el('sp-km').value,
+    forfait: el('sp-forfait').value,
+    rayon: el('sp-rayon').value,
+    validite: el('sp-validite').value || '30',
+    paiement: el('sp-paiement').value,
+    assurance: el('sp-assurance').value,
+    pied: el('sp-pied').value,
+    web: el('sp-web').value,
+    hdebut: el('sp-hdebut').value,
+    hfin: el('sp-hfin').value,
+    tva_defaut: tva,
+    couleur: setupCouleur,
+    metier: cfg.nom,
+  };
+  store.set('profil_' + metier, profil);
+  // Jours
+  joursOn = setupJoursOn.slice();
+  store.set('jours', joursOn);
+  // Synchroniser champs profil page
+  Object.keys(profil).forEach(k => { const e = el('p-' + k.replace('-','.')); if (e) e.value = profil[k]; });
+}
+
+</script>
+
+</body>
+</html>

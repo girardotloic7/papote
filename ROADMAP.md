@@ -32,6 +32,14 @@
 - Modifs sur `index.html` et `ROADMAP.md`
 - Commit suggéré : `Tableau de bord : page d'accueil avec stats temps réel`
 
+### 🐛 Bug critique corrigé (25/04 fin de session)
+Après le premier push du Tableau de bord, l'app était **complètement cassée** (impossible de sélectionner un métier au démarrage). Diagnostic :
+- Le fichier `index.html` était **tronqué** depuis le commit du 21 avril (`27ebee2`) — la fin de la fonction `sauvegarderSetup()` ainsi que les balises de fermeture `</script></body></html>` avaient été coupées (probablement lors d'une copie de fichier interrompue).
+- En production, l'app avait l'air de fonctionner car les navigateurs sont parfois tolérants. Mais après mon push, le navigateur a vraiment essayé de re-parser le JS et a échoué avec `SyntaxError: Invalid or unexpected token` à `marge: el('sp-mar`.
+- **Correction** : restauration de la fin manquante (~30 lignes) depuis le tout premier commit `69ede12`.
+
+**Leçon** : avant tout push, faire un `node --check` sur le JS extrait du index.html pour valider la syntaxe.
+
 ---
 
 ## ⏸️ État précédent — Pause après la session du 21 avril 2026
