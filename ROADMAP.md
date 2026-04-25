@@ -32,6 +32,21 @@
 - Modifs sur `index.html` et `ROADMAP.md`
 - Commit suggéré : `Tableau de bord : page d'accueil avec stats temps réel`
 
+### ✅ Polish ajouté (25/04 fin de session)
+
+**Numérotation personnalisable**
+- Nouveau bloc "Numérotation" dans le Profil
+- 2 champs : préfixe devis (défaut DV) et préfixe facture (défaut FA)
+- Aperçu temps réel : "Prochain devis : XX-2026-001"
+- Bouton "Modifier le prochain numéro" pour repartir d'un numéro spécifique (utile si on migre depuis un autre logiciel)
+- Le préfixe est appliqué partout : preview en haut de page, numéro stocké, document généré
+
+**Tooltips d'aide**
+- Petit "?" cliquable à côté des labels des champs techniques
+- Au survol (desktop) ou clic (mobile/tactile) : explication courte et claire
+- Mis sur 11 champs : SIRET, taux horaire, taux UO, taux majoré, marge matériaux, coût km, forfait déplacement, rayon gratuit, validité devis, préfixe devis, préfixe facture
+- CSS pur (pseudo-éléments `::before` et `::after`) + petit JS pour gérer le clic mobile
+
 ### 🐛 Bug critique corrigé (25/04 fin de session)
 Après le premier push du Tableau de bord, l'app était **complètement cassée** (impossible de sélectionner un métier au démarrage). Diagnostic :
 - Le fichier `index.html` était **tronqué** depuis le commit du 21 avril (`27ebee2`) — la fin de la fonction `sauvegarderSetup()` ainsi que les balises de fermeture `</script></body></html>` avaient été coupées (probablement lors d'une copie de fichier interrompue).
@@ -96,7 +111,7 @@ Objectif : ce qu'on n'a pas eu le temps de faire aujourd'hui.
   - Validation manuelle avant envoi
 - [ ] **#6 Photo → IA → Devis** (⚠ nécessite API vision externe : Claude ou GPT-4V)
 - [ ] **#7 Signature électronique** (⚠ nécessite backend + DB : Vercel KV ou Supabase)
-- [ ] **Polish** : numérotation personnalisable + tooltips d'aide
+- [x] **Polish** ✅ FAIT le 25/04/2026 : numérotation personnalisable + tooltips d'aide sur 11 champs
 
 ---
 
@@ -172,4 +187,4 @@ Toutes préfixées `dp_` (pour "devis papote").
 | Date | Durée | Résumé |
 |---|---|---|
 | 21/04/2026 | ~4h | Sécurisation clé API + email mailto + backup + recherche + hardening + setup workflow GitHub Desktop. Dashboard reporté à la prochaine session. |
-| 25/04/2026 | ~1h | Tableau de bord (page d'accueil) avec 4 cartes de stats + activité récente |
+| 25/04/2026 | ~2h | Tableau de bord + numérotation personnalisable + tooltips d'aide + correction fichier tronqué |

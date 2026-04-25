@@ -263,6 +263,63 @@ body {
 }
 
 /* ============================================================
+   TOOLTIPS D'AIDE (petit ? cliquable)
+   ============================================================ */
+.hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+  margin-left: 6px;
+  position: relative;
+  user-select: none;
+  border: none;
+  padding: 0;
+  vertical-align: middle;
+  transition: background .15s;
+}
+.hint:hover, .hint.active { background: var(--accent); color: #fff; }
+.hint::before { content: '?'; }
+.hint::after {
+  content: attr(data-hint);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: var(--text);
+  color: #fff;
+  padding: 8px 11px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 400;
+  width: 240px;
+  text-align: left;
+  line-height: 1.45;
+  z-index: 200;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s, transform .15s;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18);
+}
+.hint::after { opacity: 0; }
+.hint:hover::after, .hint.active::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+@media (max-width: 480px) {
+  .hint::after { width: 200px; font-size: 11px; left: auto; right: -4px; transform: translateY(6px); }
+  .hint:hover::after, .hint.active::after { transform: translateY(0); }
+}
+
+/* ============================================================
    DASHBOARD (Tableau de bord)
    ============================================================ */
 .dash-grid {
@@ -2729,7 +2786,7 @@ select.inp { cursor: pointer; }
           <div class="field"><label>Adresse professionnelle</label><input class="inp" id="p-adresse" placeholder="Votre adresse pro"></div>
           <div class="field"><label>Téléphone</label><input class="inp" id="p-tel" placeholder="06 12 34 56 78"></div>
           <div class="field"><label>Email</label><input class="inp" id="p-email" type="email" placeholder="contact@monentreprise.fr"></div>
-          <div class="field"><label>SIRET</label><input class="inp" id="p-siret" placeholder="123 456 789 00012"></div>
+          <div class="field"><label>SIRET<span class="hint" tabindex="0" data-hint="Numéro à 14 chiffres qui identifie ton entreprise. Tu le trouves sur ton avis INSEE ou ton extrait Kbis."></span></label><input class="inp" id="p-siret" placeholder="123 456 789 00012"></div>
         </div>
       </div>
     </div>
@@ -2738,15 +2795,32 @@ select.inp { cursor: pointer; }
       <div class="card-head"><div class="card-title">Tarifs par défaut</div></div>
       <div class="card-body">
         <div class="grid2">
-          <div class="field"><label id="p-label-taux">Taux horaire standard</label><input class="inp" id="p-taux" type="number" placeholder="55"></div>
-          <div class="field" id="p-field-uo" style="display:none"><label>Taux UO standard</label><input class="inp" id="p-taux-uo" type="number" placeholder="12"></div>
-          <div class="field"><label>Taux majoré (urgence)</label><input class="inp" id="p-taux-maj" type="number" placeholder="75"></div>
-          <div class="field"><label>Marge matériaux %</label><input class="inp" id="p-marge" type="number" placeholder="20"></div>
-          <div class="field"><label>Coût km déplacement</label><input class="inp" id="p-km" type="number" step="0.05" placeholder="0.50"></div>
-          <div class="field"><label>Forfait déplacement €</label><input class="inp" id="p-forfait" type="number" placeholder="15"></div>
-          <div class="field"><label>Rayon gratuit km</label><input class="inp" id="p-rayon" type="number" placeholder="5"></div>
-          <div class="field"><label>Validité devis (jours)</label><input class="inp" id="p-validite" type="number" placeholder="30"></div>
+          <div class="field"><label id="p-label-taux">Taux horaire standard<span class="hint" tabindex="0" data-hint="Combien tu factures une heure de main d'œuvre normale. C'est ton tarif de base, hors urgence."></span></label><input class="inp" id="p-taux" type="number" placeholder="55"></div>
+          <div class="field" id="p-field-uo" style="display:none"><label>Taux UO standard<span class="hint" tabindex="0" data-hint="UO = Unité d'Œuvre. Utilisé en garage automobile : c'est l'unité de temps pour facturer une réparation. 1 UO = environ 6 minutes."></span></label><input class="inp" id="p-taux-uo" type="number" placeholder="12"></div>
+          <div class="field"><label>Taux majoré (urgence)<span class="hint" tabindex="0" data-hint="Tarif horaire pour les interventions urgentes (week-end, soir, dépannage). En général 30 à 50% plus cher que le tarif normal."></span></label><input class="inp" id="p-taux-maj" type="number" placeholder="75"></div>
+          <div class="field"><label>Marge matériaux %<span class="hint" tabindex="0" data-hint="Combien tu rajoutes en pourcentage sur le prix d'achat des matériaux. Ex : matériau acheté 100€, marge 20% → tu le factures 120€."></span></label><input class="inp" id="p-marge" type="number" placeholder="20"></div>
+          <div class="field"><label>Coût km déplacement<span class="hint" tabindex="0" data-hint="Combien tu factures par kilomètre quand tu te déplaces chez le client. Le tarif officiel des Impôts (2025) est de 0,529€/km en moyenne."></span></label><input class="inp" id="p-km" type="number" step="0.05" placeholder="0.50"></div>
+          <div class="field"><label>Forfait déplacement €<span class="hint" tabindex="0" data-hint="Frais fixe ajouté pour chaque déplacement, même court. Ex : 15€ pour sortir le camion."></span></label><input class="inp" id="p-forfait" type="number" placeholder="15"></div>
+          <div class="field"><label>Rayon gratuit km<span class="hint" tabindex="0" data-hint="Distance en km autour de chez toi où tu ne factures pas le déplacement. Ex : rayon 5 → trajets &lt; 5 km gratuits."></span></label><input class="inp" id="p-rayon" type="number" placeholder="5"></div>
+          <div class="field"><label>Validité devis (jours)<span class="hint" tabindex="0" data-hint="Pendant combien de jours ton devis reste valable. Au-delà, le client doit te redemander un nouveau devis (ce qui te protège des hausses de prix)."></span></label><input class="inp" id="p-validite" type="number" placeholder="30"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Numérotation personnalisée -->
+    <div class="card">
+      <div class="card-head"><div class="card-title">Numérotation</div></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:.75rem">Personnalise les préfixes de tes devis et factures. Format : <strong>PRÉFIXE-ANNÉE-NUMÉRO</strong>.</p>
+        <div class="grid2">
+          <div class="field"><label>Préfixe devis<span class="hint" tabindex="0" data-hint="2 ou 3 lettres au début du numéro de tes devis. Ex : DV (par défaut), ou tes initiales (LG), ou ton entreprise (PA pour Papote)."></span></label><input class="inp" id="p-prefix-devis" placeholder="DV" maxlength="6" style="text-transform:uppercase" oninput="rafraichirApercuNumeros()"></div>
+          <div class="field"><label>Préfixe facture<span class="hint" tabindex="0" data-hint="2 ou 3 lettres au début du numéro de tes factures. Par défaut FA."></span></label><input class="inp" id="p-prefix-facture" placeholder="FA" maxlength="6" style="text-transform:uppercase" oninput="rafraichirApercuNumeros()"></div>
+        </div>
+        <div style="margin-top:.75rem;padding:.65rem .75rem;background:var(--bg);border-radius:8px;font-size:13px">
+          <div>Prochain devis : <strong id="p-next-devis" style="color:var(--accent)">DV-2026-001</strong></div>
+          <div style="margin-top:.25rem">Prochaine facture : <strong id="p-next-facture" style="color:var(--accent)">FA-2026-001</strong></div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:.5rem" onclick="modifierProchainNumero()">🔢 Modifier le prochain numéro</button>
       </div>
     </div>
 
@@ -4051,10 +4125,11 @@ function setDocType(type) {
   const sub = el('docTypeBannerSub');
   if (sub) sub.textContent = isFacture ? 'Dites "fais-moi un devis" pour basculer' : 'Dites "fais-moi une facture" pour basculer';
 
-  // Numéro
+  // Numéro (préfixe personnalisable depuis le profil)
   const year = new Date().getFullYear();
-  const prefix = isFacture ? 'FA' : 'DV';
-  const n = (store.get('counter_' + prefix + '_' + year) || 0) + 1;
+  const prefix = getPrefix(isFacture ? 'facture' : 'devis');
+  const internalPrefix = isFacture ? 'FA' : 'DV';
+  const n = (store.get('counter_' + internalPrefix + '_' + year) || 0) + 1;
   const numEl = el('doc-num-display');
   if (numEl) numEl.textContent = `${prefix}-${year}-${String(n).padStart(3,'0')}`;
 
@@ -4328,14 +4403,78 @@ function calculTotaux() {
   return { totalHT, totalAchat, tva, ttc };
 }
 
+// ============================================================
+// NUMÉROTATION PERSONNALISÉE (préfixes du profil)
+// ============================================================
+function getPrefix(type) {
+  const profil = store.get('profil_' + metier) || {};
+  const key = type === 'facture' ? 'prefix-facture' : 'prefix-devis';
+  const fallback = type === 'facture' ? 'FA' : 'DV';
+  return (profil[key] || fallback).toString().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || fallback;
+}
+
+function getCounterKey(type) {
+  const year = new Date().getFullYear();
+  // On garde la même clé interne pour ne pas casser les compteurs existants
+  const internalPrefix = type === 'facture' ? 'FA' : 'DV';
+  return 'counter_' + internalPrefix + '_' + year;
+}
+
 function genererNumeroDoc(type) {
   const year = new Date().getFullYear();
-  const prefix = type === 'facture' ? 'FA' : 'DV';
-  const key = 'counter_' + prefix + '_' + year;
+  const prefix = getPrefix(type);
+  const key = getCounterKey(type);
   const n = (store.get(key) || 0) + 1;
   store.set(key, n);
   return `${prefix}-${year}-${String(n).padStart(3, '0')}`;
 }
+
+function modifierProchainNumero() {
+  const year = new Date().getFullYear();
+  const devisCnt = store.get('counter_DV_' + year) || 0;
+  const factCnt = store.get('counter_FA_' + year) || 0;
+  const newDevis = prompt(`Prochain numéro de devis pour ${year} ?\n(actuellement le prochain sera #${devisCnt + 1})`, devisCnt + 1);
+  if (newDevis !== null && newDevis !== '') {
+    const n = parseInt(newDevis, 10);
+    if (!isNaN(n) && n > 0) store.set('counter_DV_' + year, n - 1);
+  }
+  const newFact = prompt(`Prochain numéro de facture pour ${year} ?\n(actuellement le prochain sera #${factCnt + 1})`, factCnt + 1);
+  if (newFact !== null && newFact !== '') {
+    const n = parseInt(newFact, 10);
+    if (!isNaN(n) && n > 0) store.set('counter_FA_' + year, n - 1);
+  }
+  rafraichirApercuNumeros();
+  alert('✓ Numérotation mise à jour. Les prochains documents utiliseront ces numéros.');
+}
+
+function rafraichirApercuNumeros() {
+  const year = new Date().getFullYear();
+  const devisCnt = (store.get('counter_DV_' + year) || 0) + 1;
+  const factCnt = (store.get('counter_FA_' + year) || 0) + 1;
+  // Si l'utilisateur tape dans le champ, on prévisualise direct ; sinon on lit le profil sauvegardé
+  const liveDevis = (v('p-prefix-devis') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const liveFact  = (v('p-prefix-facture') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const prefDevis = liveDevis || getPrefix('devis');
+  const prefFact  = liveFact  || getPrefix('facture');
+  const previewDevis = `${prefDevis}-${year}-${String(devisCnt).padStart(3,'0')}`;
+  const previewFact  = `${prefFact}-${year}-${String(factCnt).padStart(3,'0')}`;
+  const eD = el('p-next-devis'); if (eD) eD.textContent = previewDevis;
+  const eF = el('p-next-facture'); if (eF) eF.textContent = previewFact;
+}
+
+// Tooltip click handler (pour mobile)
+document.addEventListener('click', e => {
+  const hint = e.target.closest && e.target.closest('.hint');
+  if (hint) {
+    e.preventDefault();
+    e.stopPropagation();
+    const wasActive = hint.classList.contains('active');
+    document.querySelectorAll('.hint.active').forEach(h => h.classList.remove('active'));
+    if (!wasActive) hint.classList.add('active');
+  } else {
+    document.querySelectorAll('.hint.active').forEach(h => h.classList.remove('active'));
+  }
+});
 
 function genererDevis() { genererEtSauvegarder(); }
 
@@ -4709,6 +4848,7 @@ function goPage(p) {
   if (p === 'tableau') renderTableau();
   if (p === 'agenda') { renderAgenda(); setTimeout(() => analyseProactive(), 500); }
   if (p === 'historique') renderDocList('all');
+  if (p === 'profil') { if (typeof rafraichirApercuNumeros === 'function') rafraichirApercuNumeros(); }
   if (p === 'devis') filtrerDevis('all', null);
   if (p === 'factures') { initFacturePage(); renderFacturesList(); }
   if (p === 'layout') { renderModulesGrid(); renderDevisPreview(); }
@@ -5290,8 +5430,11 @@ async function genererMessage() {
 // ============================================================
 function sauvegarderProfil() {
   const d = {};
-  ['nom', 'metier', 'adresse', 'tel', 'email', 'siret', 'taux', 'taux-uo', 'taux-maj', 'marge', 'km', 'forfait', 'rayon', 'validite', 'tva-renov', 'tva-std', 'tva-energ']
+  ['nom', 'metier', 'adresse', 'tel', 'email', 'siret', 'taux', 'taux-uo', 'taux-maj', 'marge', 'km', 'forfait', 'rayon', 'validite', 'tva-renov', 'tva-std', 'tva-energ', 'prefix-devis', 'prefix-facture']
     .forEach(k => { d[k] = v('p-' + k); });
+  // Normaliser les préfixes (majuscules, sans caractères spéciaux)
+  if (d['prefix-devis']) d['prefix-devis'] = d['prefix-devis'].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (d['prefix-facture']) d['prefix-facture'] = d['prefix-facture'].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
   // Conserver logo si existant
   const existing = store.get('profil_' + metier) || {};
   if (existing.logo) d.logo = existing.logo;
@@ -5622,11 +5765,11 @@ function initFacturePage() {
   const echeance = new Date(today); echeance.setDate(echeance.getDate() + 30);
   if (!v('f-date')) { const e = el('f-date'); if(e) e.value = fmt(today); }
   if (!v('f-echeance')) { const e = el('f-echeance'); if(e) e.value = fmt(echeance); }
-  // Numéro
+  // Numéro (préfixe personnalisable)
   const year = today.getFullYear();
   const n = (store.get('counter_FA_' + year) || 0) + 1;
   const numEl = el('factureNumPreview');
-  if (numEl) numEl.textContent = `FA-${year}-${String(n).padStart(3,'0')}`;
+  if (numEl) numEl.textContent = `${getPrefix('facture')}-${year}-${String(n).padStart(3,'0')}`;
   // Pré-remplir mentions légales depuis profil
   const profil = store.get('profil_' + metier) || {};
   if (profil['tva-num'] && el('f-tva-num')) el('f-tva-num').value = profil['tva-num'];
