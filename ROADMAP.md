@@ -4,7 +4,37 @@
 
 ---
 
-## ⏸️ État actuel — Pause après la session du 21 avril 2026
+## 🆕 Session du 25 avril 2026 — Tableau de bord
+
+### ✅ Fait aujourd'hui
+
+**Page d'accueil "Tableau de bord"**
+- Nouvel onglet "Accueil" 🏠 ajouté tout au début de la barre de navigation
+- C'est désormais la première page visible en ouvrant Papote
+- 4 cartes colorées avec stats temps réel :
+  - 💰 **CA encaissé du mois** — somme des factures payées du mois + comparaison % vs mois précédent
+  - ⏳ **Devis en attente** — nombre + montant total à confirmer (toutes périodes)
+  - ✅ **Taux d'acceptation** — % d'acceptés sur les devis décidés ce mois
+  - ⚠️ **Impayés en cours** — factures unpaid/late + détection des retards via dateEcheance
+- Bloc "Activité récente" : les 5 derniers documents, cliquables pour ouvrir la modal détails
+- Boutons d'accès rapide en bas : Devis · Factures · Historique
+- Salutation personnalisée selon l'heure (Bonjour / Bon après-midi / Bonsoir) + prénom du profil
+
+### 🔧 Détails techniques
+- Fonction `renderTableau()` (~150 lignes), appelée :
+  - au démarrage de l'app (dans `demarrer()`)
+  - à chaque navigation vers la page (dans `goPage('tableau')`)
+- `currentPage` initialisé à `'tableau'` (au lieu de `'devis'`)
+- `PAGE_ORDER` : `'tableau'` ajouté en première position
+- CSS : `.dash-grid` (2 colonnes desktop, 1 colonne mobile), `.dash-card`, `.dash-section`, `.dash-actions`
+
+### 🚀 À pousser
+- Modifs sur `index.html` et `ROADMAP.md`
+- Commit suggéré : `Tableau de bord : page d'accueil avec stats temps réel`
+
+---
+
+## ⏸️ État précédent — Pause après la session du 21 avril 2026
 
 ### ✅ Fait et prêt à être déployé
 
@@ -47,11 +77,8 @@
 
 Objectif : ce qu'on n'a pas eu le temps de faire aujourd'hui.
 
-- [ ] **#1 Dashboard / Stats** (commencé mais annulé suite à un reset de fichier — à refaire proprement)
-  - Nouvelle page avec : CA du mois, devis en attente, taux de conversion, factures impayées
-  - Sélecteur de période (mois / trimestre / année / total)
-  - Top clients
-  - Alertes "à traiter"
+- [x] **#1 Dashboard / Stats** — ✅ FAIT le 25/04/2026 (page Accueil avec 4 cartes + activité récente)
+  - 🔜 Améliorations possibles plus tard : sélecteur de période, top clients, alertes "à traiter"
 - [ ] **#3 Catalogue de prestations réutilisables**
   - Bibliothèque personnelle (désignation + prix + temps)
   - Picker en un clic dans le formulaire devis
@@ -137,3 +164,4 @@ Toutes préfixées `dp_` (pour "devis papote").
 | Date | Durée | Résumé |
 |---|---|---|
 | 21/04/2026 | ~4h | Sécurisation clé API + email mailto + backup + recherche + hardening + setup workflow GitHub Desktop. Dashboard reporté à la prochaine session. |
+| 25/04/2026 | ~1h | Tableau de bord (page d'accueil) avec 4 cartes de stats + activité récente |

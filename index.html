@@ -263,6 +263,86 @@ body {
 }
 
 /* ============================================================
+   DASHBOARD (Tableau de bord)
+   ============================================================ */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+.dash-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #E8E2DA);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  transition: transform .15s, box-shadow .2s;
+}
+.dash-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.dash-card-icon { font-size: 22px; margin-bottom: .35rem; }
+.dash-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: .35rem;
+}
+.dash-card-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+  letter-spacing: -.5px;
+}
+.dash-card-trend {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: .35rem;
+  min-height: 16px;
+}
+.dash-card-trend.up { color: var(--accent2); font-weight: 600; }
+.dash-card-trend.down { color: var(--accent); font-weight: 600; }
+.dash-card-ca { background: linear-gradient(135deg, #EAF3DE 0%, #F5F0EA 100%); }
+.dash-card-ca .dash-card-value { color: var(--accent2-dark); }
+.dash-card-pending { background: linear-gradient(135deg, #FEF4EF 0%, #FFFBF6 100%); }
+.dash-card-conv { background: linear-gradient(135deg, #F0F4FA 0%, #FAFBFD 100%); }
+.dash-card-conv .dash-card-value { color: #2C5282; }
+.dash-card-impayes { background: linear-gradient(135deg, #FEE9E2 0%, #FFF5F2 100%); }
+.dash-card-impayes .dash-card-value { color: var(--accent-dark); }
+
+.dash-section {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #E8E2DA);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+.dash-section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: .75rem;
+  letter-spacing: -.2px;
+}
+.dash-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.dash-actions .btn { font-size: 12.5px; }
+
+@media (max-width: 480px) {
+  .dash-grid { grid-template-columns: 1fr; }
+  .dash-card-value { font-size: 22px; }
+}
+
+/* ============================================================
    CARDS
    ============================================================ */
 .card {
@@ -2090,7 +2170,11 @@ select.inp { cursor: pointer; }
     </a>
     <!-- Onglets scrollables -->
     <div class="nav-items">
-    <div class="nav-item active" id="nav-document" onclick="goPage('document')">
+    <div class="nav-item active" id="nav-tableau" onclick="goPage('tableau')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Accueil
+    </div>
+    <div class="nav-item" id="nav-document" onclick="goPage('document')">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
       <span id="nav-document-lbl">Nouveau</span>
     </div>
@@ -2139,8 +2223,61 @@ select.inp { cursor: pointer; }
     <button class="trial-banner-btn" onclick="goPage('offres')">Voir les offres →</button>
   </div>
 
+  <!-- ====== PAGE TABLEAU DE BORD ====== -->
+  <div class="page show" id="page-tableau">
+    <div class="page-title">
+      <span>Bonjour <span id="dashHello">👋</span></span>
+      <button class="btn btn-primary btn-sm" onclick="goPage('document')">+ Nouveau devis</button>
+    </div>
+
+    <div id="dashPeriod" style="font-size:13px;color:var(--muted);margin-bottom:1rem"></div>
+
+    <div class="dash-grid">
+      <div class="dash-card dash-card-ca">
+        <div class="dash-card-icon">💰</div>
+        <div class="dash-card-label">CA encaissé du mois</div>
+        <div class="dash-card-value" id="dashCA">0,00 €</div>
+        <div class="dash-card-trend" id="dashCATrend"></div>
+      </div>
+
+      <div class="dash-card dash-card-pending">
+        <div class="dash-card-icon">⏳</div>
+        <div class="dash-card-label">Devis en attente</div>
+        <div class="dash-card-value" id="dashPending">0</div>
+        <div class="dash-card-trend" id="dashPendingDetail"></div>
+      </div>
+
+      <div class="dash-card dash-card-conv">
+        <div class="dash-card-icon">✅</div>
+        <div class="dash-card-label">Taux d'acceptation (mois)</div>
+        <div class="dash-card-value" id="dashConv">—</div>
+        <div class="dash-card-trend" id="dashConvDetail"></div>
+      </div>
+
+      <div class="dash-card dash-card-impayes">
+        <div class="dash-card-icon">⚠️</div>
+        <div class="dash-card-label">Impayés en cours</div>
+        <div class="dash-card-value" id="dashImpayes">0,00 €</div>
+        <div class="dash-card-trend" id="dashImpayesDetail"></div>
+      </div>
+    </div>
+
+    <div class="dash-section">
+      <div class="dash-section-title">Activité récente</div>
+      <div id="dashRecent" class="doc-list">
+        <div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px;font-style:italic">Aucune activité pour l'instant.<br>Crée ton premier devis pour démarrer.</div>
+      </div>
+    </div>
+
+    <div class="dash-actions">
+      <button class="btn btn-ghost" onclick="goPage('devis')">📋 Voir tous les devis</button>
+      <button class="btn btn-ghost" onclick="goPage('factures')">🧾 Voir les factures</button>
+      <button class="btn btn-ghost" onclick="goPage('historique')">🗂️ Historique complet</button>
+    </div>
+  </div>
+
   <!-- ====== PAGE DOCUMENT (nouveau devis ou facture) ====== -->
-  <div class="page show" id="page-document">
+  <div class="page" id="page-document">
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:6px">
@@ -3444,7 +3581,7 @@ async function groqFetch(messages, max_tokens = 900) {
 // ============================================================
 let metier = null;
 let cfg = null;
-let currentPage = 'devis';
+let currentPage = 'tableau';
 
 // Données devis
 let lignes = [];
@@ -3707,6 +3844,9 @@ async function chargerDonnees() {
 
   // Nettoyage silencieux des docs expirés
   nettoyerDocsExpiresAuto();
+
+  // Rendu initial du tableau de bord (page d'accueil)
+  if (typeof renderTableau === 'function') renderTableau();
 }
 
 function nettoyerDocsExpiresAuto() {
@@ -3725,6 +3865,163 @@ function initDates() {
   el('bloc-debut').value = fmt(t);
   const t2 = new Date(t); t2.setDate(t2.getDate() + 1);
   el('bloc-fin').value = fmt(t2);
+}
+
+// ============================================================
+// TABLEAU DE BORD
+// ============================================================
+function renderTableau() {
+  const docs = store.get('documents') || [];
+  const now = new Date();
+  const moisLabels = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+  // Bornes du mois en cours et du mois précédent
+  const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+  const debutMoisPrec = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const finMoisPrec = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+  const dansMois = (dStr, debut, fin) => {
+    if (!dStr) return false;
+    const d = new Date(dStr);
+    if (isNaN(d)) return false;
+    return d >= debut && d <= fin;
+  };
+  const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  // Salutation selon l'heure
+  const h = now.getHours();
+  const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
+  const profil = store.get('profil_' + (typeof metier !== 'undefined' ? metier : '')) || {};
+  const prenom = (profil.nom || '').split(' ')[0] || '';
+  const helloEl = el('dashHello');
+  if (helloEl) helloEl.textContent = prenom ? prenom + ' 👋' : '👋';
+  const titleEl = document.querySelector('#page-tableau .page-title span:first-child');
+  if (titleEl) titleEl.innerHTML = `${salut} <span id="dashHello">${prenom ? prenom + ' 👋' : '👋'}</span>`;
+
+  // Période affichée
+  const dashPeriod = el('dashPeriod');
+  if (dashPeriod) dashPeriod.textContent = `Vue d'ensemble — ${moisLabels[now.getMonth()]} ${now.getFullYear()}`;
+
+  // ===== 1. CA encaissé du mois (factures payées) =====
+  const facturesPayeesMois = docs.filter(d => d.type === 'facture' && d.status === 'paid' && dansMois(d.date, debutMois, finMois));
+  const facturesPayeesMoisPrec = docs.filter(d => d.type === 'facture' && d.status === 'paid' && dansMois(d.date, debutMoisPrec, finMoisPrec));
+  const caMois = facturesPayeesMois.reduce((s, d) => s + (d.totalTTC || 0), 0);
+  const caMoisPrec = facturesPayeesMoisPrec.reduce((s, d) => s + (d.totalTTC || 0), 0);
+  el('dashCA').textContent = eur(caMois);
+  const caTrendEl = el('dashCATrend');
+  if (caTrendEl) {
+    if (caMoisPrec === 0 && caMois === 0) {
+      caTrendEl.textContent = 'Aucune facture payée pour l\'instant';
+      caTrendEl.className = 'dash-card-trend';
+    } else if (caMoisPrec === 0) {
+      caTrendEl.textContent = '✨ Premier mois de facturation';
+      caTrendEl.className = 'dash-card-trend up';
+    } else {
+      const pct = Math.round(((caMois - caMoisPrec) / caMoisPrec) * 100);
+      caTrendEl.textContent = (pct >= 0 ? '▲ +' : '▼ ') + pct + '% vs ' + moisLabels[debutMoisPrec.getMonth()];
+      caTrendEl.className = 'dash-card-trend ' + (pct >= 0 ? 'up' : 'down');
+    }
+  }
+
+  // ===== 2. Devis en attente (toutes périodes) =====
+  const devisEnAttente = docs.filter(d => d.type === 'devis' && d.status === 'pending');
+  const totalAttente = devisEnAttente.reduce((s, d) => s + (d.totalTTC || 0), 0);
+  el('dashPending').textContent = devisEnAttente.length;
+  const pdetail = el('dashPendingDetail');
+  if (pdetail) {
+    if (devisEnAttente.length === 0) {
+      pdetail.textContent = 'Aucun devis en attente 🎯';
+      pdetail.className = 'dash-card-trend';
+    } else {
+      pdetail.textContent = eur(totalAttente) + ' à confirmer';
+      pdetail.className = 'dash-card-trend';
+    }
+  }
+
+  // ===== 3. Taux d'acceptation (devis émis ce mois) =====
+  const devisDuMois = docs.filter(d => d.type === 'devis' && dansMois(d.date, debutMois, finMois));
+  const acceptesOuFactures = devisDuMois.filter(d => d.status === 'accepted' || d.status === 'invoiced').length;
+  const decides = devisDuMois.filter(d => d.status === 'accepted' || d.status === 'invoiced' || d.status === 'refused').length;
+  const convEl = el('dashConv');
+  const convDetail = el('dashConvDetail');
+  if (decides === 0) {
+    convEl.textContent = '—';
+    if (convDetail) {
+      convDetail.textContent = devisDuMois.length === 0 ? 'Aucun devis ce mois' : devisDuMois.length + ' devis sans réponse encore';
+      convDetail.className = 'dash-card-trend';
+    }
+  } else {
+    const taux = Math.round((acceptesOuFactures / decides) * 100);
+    convEl.textContent = taux + '%';
+    if (convDetail) {
+      convDetail.textContent = acceptesOuFactures + ' accepté' + (acceptesOuFactures > 1 ? 's' : '') + ' / ' + decides + ' décidé' + (decides > 1 ? 's' : '');
+      convDetail.className = 'dash-card-trend';
+    }
+  }
+
+  // ===== 4. Impayés en cours =====
+  const today = new Date(); today.setHours(0,0,0,0);
+  const impayes = docs.filter(d => {
+    if (d.type !== 'facture') return false;
+    if (d.status === 'unpaid' || d.status === 'late') return true;
+    return false;
+  });
+  // Détecter les retards via dateEcheance
+  const enRetard = impayes.filter(d => {
+    if (d.status === 'late') return true;
+    if (!d.dateEcheance) return false;
+    const ech = new Date(d.dateEcheance); ech.setHours(0,0,0,0);
+    return ech < today;
+  });
+  const totalImpayes = impayes.reduce((s, d) => s + (d.totalTTC || 0), 0);
+  el('dashImpayes').textContent = eur(totalImpayes);
+  const impDetail = el('dashImpayesDetail');
+  if (impDetail) {
+    if (impayes.length === 0) {
+      impDetail.textContent = 'Tout est à jour ✓';
+      impDetail.className = 'dash-card-trend up';
+    } else if (enRetard.length > 0) {
+      impDetail.textContent = enRetard.length + ' facture' + (enRetard.length > 1 ? 's' : '') + ' en retard !';
+      impDetail.className = 'dash-card-trend down';
+    } else {
+      impDetail.textContent = impayes.length + ' facture' + (impayes.length > 1 ? 's' : '') + ' à encaisser';
+      impDetail.className = 'dash-card-trend';
+    }
+  }
+
+  // ===== Activité récente (5 derniers docs) =====
+  const recents = [...docs]
+    .filter(d => d.date)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 5);
+  const recentEl = el('dashRecent');
+  if (recentEl) {
+    if (recents.length === 0) {
+      recentEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px;font-style:italic">Aucune activité pour l\'instant.<br>Crée ton premier devis pour démarrer.</div>';
+    } else {
+      const MOIS_S = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+      const fmtFr = s => { const d = new Date(s); return isNaN(d) ? s : `${d.getDate()} ${MOIS_S[d.getMonth()]}`; };
+      const statusLabels = { pending:'En attente', accepted:'Accepté ✓', refused:'Refusé', invoiced:'Facturé', paid:'Payé ✓', unpaid:'Impayé', late:'En retard !' };
+      const statusColors = {
+        pending: '#7A7060', accepted: '#3A6B4A', refused: '#C00',
+        invoiced: '#2C5282', paid: '#3A6B4A', unpaid: '#C94E32', late: '#C00'
+      };
+      recentEl.innerHTML = recents.map(doc => `
+        <div class="doc-item" onclick='ouvrirDocModal(${JSON.stringify(doc).replace(/'/g, "&#39;")})' style="cursor:pointer">
+          <div class="doc-item-head">
+            <div>
+              <div class="doc-item-num">${doc.type === 'facture' ? '🧾' : '📋'} ${doc.num || ''} <span style="font-weight:400;color:var(--muted)">· ${fmtFr(doc.date)}</span></div>
+              <div class="doc-item-client">${doc.client || 'Client'}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="doc-item-amount">${eur(doc.totalTTC || 0)}</div>
+              <div style="font-size:11px;color:${statusColors[doc.status] || '#7A7060'};font-weight:600;margin-top:2px">${statusLabels[doc.status] || doc.status || ''}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
 }
 
 // ============================================================
@@ -4380,11 +4677,11 @@ function initRipples() {
 // ============================================================
 // NAVIGATION AVEC SLIDE
 // ============================================================
-const PAGE_ORDER = ['document', 'devis', 'factures', 'historique', 'agenda', 'envoi', 'layout', 'profil', 'offres'];
+const PAGE_ORDER = ['tableau', 'document', 'devis', 'factures', 'historique', 'agenda', 'envoi', 'layout', 'profil', 'offres'];
 let lastPageIndex = 0;
 
 function goPage(p) {
-  const allPages = ['document','devis','agenda','envoi','profil','historique','factures','layout','offres'];
+  const allPages = ['tableau','document','devis','agenda','envoi','profil','historique','factures','layout','offres'];
   const newIndex = PAGE_ORDER.indexOf(p);
   const dir = newIndex >= lastPageIndex ? 'right' : 'left';
 
@@ -4409,6 +4706,7 @@ function goPage(p) {
   currentPage = p;
   lastPageIndex = newIndex >= 0 ? newIndex : lastPageIndex;
 
+  if (p === 'tableau') renderTableau();
   if (p === 'agenda') { renderAgenda(); setTimeout(() => analyseProactive(), 500); }
   if (p === 'historique') renderDocList('all');
   if (p === 'devis') filtrerDevis('all', null);
