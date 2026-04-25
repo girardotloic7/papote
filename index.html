@@ -263,6 +263,58 @@ body {
 }
 
 /* ============================================================
+   OVERLAY AIDE MICRO (popup d'aide contextuel)
+   ============================================================ */
+.mic-help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28,27,24,.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+  animation: fadeIn .2s ease;
+}
+.mic-help-overlay.show { display: flex; }
+.mic-help-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 1.5rem 1.25rem 1.25rem;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  animation: scaleIn .25s cubic-bezier(.4,0,.2,1);
+}
+.mic-help-icon {
+  font-size: 38px;
+  text-align: center;
+  margin-bottom: .5rem;
+}
+.mic-help-title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: .75rem;
+  color: var(--text);
+}
+.mic-help-body {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.55;
+  margin-bottom: 1.25rem;
+}
+.mic-help-actions {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+}
+.mic-help-actions .btn { font-size: 13px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+
+/* ============================================================
    TOOLTIPS D'AIDE (petit ? cliquable)
    ============================================================ */
 .hint {
@@ -3214,6 +3266,7 @@ select.inp { cursor: pointer; }
     <div class="mic-modes" id="micModes">
       <span>Maintenir = court</span>
       <span>1 sec = verrouillage</span>
+      <span class="mic-help-link" onclick="testerMicro()" style="color:var(--accent);cursor:pointer;text-decoration:underline">💡 Le micro ne marche pas ?</span>
     </div>
   </div>
 
@@ -3813,16 +3866,20 @@ function lancerApp() {
   adapterInterface();
   chargerDonnees();
   goPage('document');
-  // Demander la permission micro immédiatement (important sur Android Chrome)
+  // Demander la permission micro immédiatement (déclenche le popup natif iOS/Android)
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
         // Permission accordée — arrêter le stream immédiatement (juste pour débloquer le verrou)
         stream.getTracks().forEach(t => t.stop());
+        window.__micGranted = true;
         feed('🎤 Micro autorisé — appuyez pour parler', 'ok', 'document');
       })
-      .catch(() => {
-        feed('⚠ Autorisez le micro dans Chrome pour utiliser la dictée', 'warn', 'document');
+      .catch(err => {
+        window.__micGranted = false;
+        // On n'affiche PAS de message tout de suite : on attend le 1er clic micro
+        // pour montrer un guide contextuel adapté à l'appareil
+        console.warn('Mic permission init:', err.name, err.message);
       });
   }
   setTimeout(() => {
@@ -6328,7 +6385,7 @@ async function appliquer(result, zone = 'document') {
 // ============================================================
 let fieldRecog = null, fieldRecActive = null;
 function microChamp(inputId, btnId, mode) {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { alert('Chrome/Edge requis'); return; }
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { showMicHelp('not-supported'); return; }
   if (fieldRecActive === btnId) { if (fieldRecog) fieldRecog.stop(); return; }
   if (fieldRecog) fieldRecog.stop();
   fieldRecActive = btnId;
@@ -6392,9 +6449,151 @@ function cancelLockRing() {
 
 function lockMic() { cancelLockRing(); setMicState('locked'); }
 
+// ============================================================
+// DÉTECTION PLATEFORME (pour messages micro adaptés)
+// ============================================================
+function detectPlatform() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+  const isChromeIOS = /CriOS/i.test(ua);
+  const isFirefox = /Firefox|FxiOS/i.test(ua);
+  const isBrave = navigator.brave && navigator.brave.isBrave;
+  if (isIOS) return isChromeIOS ? 'ios-chrome' : 'ios-safari';
+  if (isAndroid) {
+    if (isFirefox) return 'android-firefox';
+    return 'android-chrome';
+  }
+  if (isFirefox) return 'desktop-firefox';
+  if (isBrave) return 'desktop-brave';
+  return 'desktop-chrome';
+}
+
+// ============================================================
+// AIDE MICRO CONTEXTUELLE (popup)
+// ============================================================
+function showMicHelp(reason) {
+  const platform = detectPlatform();
+  // Crée l'overlay si inexistant
+  let overlay = el('micHelpOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'micHelpOverlay';
+    overlay.className = 'mic-help-overlay';
+    overlay.innerHTML = `
+      <div class="mic-help-card">
+        <div class="mic-help-icon">🎤</div>
+        <div class="mic-help-title" id="micHelpTitle"></div>
+        <div class="mic-help-body" id="micHelpBody"></div>
+        <div class="mic-help-actions">
+          <button class="btn btn-ghost" onclick="closeMicHelp()">Fermer</button>
+          <button class="btn btn-primary" id="micHelpRetry" onclick="retryMicPermission()">Réessayer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+  // Contenu adapté à la plateforme et à la raison
+  let title, body;
+  if (reason === 'not-supported') {
+    title = 'Navigateur non compatible';
+    if (platform === 'desktop-firefox' || platform === 'android-firefox') {
+      body = `Firefox ne supporte pas la dictée vocale.<br><br><strong>Sur ordinateur :</strong> utilise <strong>Chrome</strong> ou <strong>Edge</strong>.<br><strong>Sur Android :</strong> utilise <strong>Chrome</strong>.`;
+    } else if (platform === 'desktop-brave') {
+      body = `Brave désactive la dictée par défaut.<br><br>Active-la dans <strong>brave://settings/content/microphone</strong>, ou utilise Chrome.`;
+    } else {
+      body = `Ton navigateur ne supporte pas la dictée vocale. Utilise <strong>Chrome</strong> (Android, ordi) ou <strong>Safari</strong> (iPhone).`;
+    }
+  } else if (reason === 'denied' || reason === 'not-allowed') {
+    if (platform === 'ios-safari') {
+      title = 'Autoriser le micro sur iPhone';
+      body = `<ol style="text-align:left;margin:0;padding-left:1.2rem;line-height:1.7">
+        <li>Ouvre <strong>Réglages</strong> sur ton iPhone</li>
+        <li>Descends jusqu'à <strong>Safari</strong></li>
+        <li>Touche <strong>Microphone</strong></li>
+        <li>Choisis <strong>Autoriser</strong></li>
+        <li>Reviens ici et appuie sur <strong>Réessayer</strong></li>
+      </ol>
+      <p style="font-size:12px;color:var(--muted);margin-top:.75rem">Si ça ne marche toujours pas : Réglages → Confidentialité → Microphone → vérifie que Safari est activé.</p>`;
+    } else if (platform === 'ios-chrome') {
+      title = 'Autoriser le micro dans Chrome iPhone';
+      body = `<ol style="text-align:left;margin:0;padding-left:1.2rem;line-height:1.7">
+        <li>Ouvre <strong>Réglages iPhone</strong></li>
+        <li>Descends jusqu'à <strong>Chrome</strong></li>
+        <li>Active le <strong>Microphone</strong></li>
+        <li>Reviens et appuie sur Réessayer</li>
+      </ol>
+      <p style="font-size:12px;color:var(--muted);margin-top:.75rem">Astuce : sur iPhone, Safari natif fonctionne souvent mieux que Chrome pour la dictée.</p>`;
+    } else if (platform === 'android-chrome') {
+      title = 'Autoriser le micro';
+      body = `<ol style="text-align:left;margin:0;padding-left:1.2rem;line-height:1.7">
+        <li>Touche le <strong>cadenas 🔒</strong> à côté de l'URL en haut</li>
+        <li>Touche <strong>Autorisations</strong></li>
+        <li>Active le <strong>Microphone</strong></li>
+        <li>Recharge la page</li>
+      </ol>`;
+    } else {
+      title = 'Autoriser le micro';
+      body = `Clique sur l'icône <strong>cadenas 🔒</strong> à gauche de l'URL en haut, puis active le microphone, puis recharge la page (F5).`;
+    }
+  } else {
+    title = 'Problème avec le micro';
+    body = `Une erreur inattendue s'est produite. Essaie de recharger la page.`;
+  }
+  el('micHelpTitle').innerHTML = title;
+  el('micHelpBody').innerHTML = body;
+  overlay.classList.add('show');
+}
+
+function closeMicHelp() {
+  const o = el('micHelpOverlay'); if (o) o.classList.remove('show');
+}
+
+function testerMicro() {
+  // Test explicite du micro déclenché par un clic utilisateur
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showMicHelp('not-supported');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showMicHelp('not-supported');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      stream.getTracks().forEach(t => t.stop());
+      window.__micGranted = true;
+      // Notification de succès
+      feed('✓ Micro autorisé et fonctionnel ! Appuie longuement sur le bouton micro pour parler.', 'ok', currentPage);
+    })
+    .catch(err => {
+      window.__micGranted = false;
+      console.warn('testerMicro:', err.name, err.message);
+      showMicHelp('denied');
+    });
+}
+
+function retryMicPermission() {
+  closeMicHelp();
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        stream.getTracks().forEach(t => t.stop());
+        window.__micGranted = true;
+        feed('🎤 Micro autorisé — appuyez pour parler', 'ok', currentPage);
+      })
+      .catch(err => {
+        window.__micGranted = false;
+        feed('⚠ Permission micro toujours refusée', 'warn', currentPage);
+        setTimeout(() => showMicHelp('denied'), 800);
+      });
+  }
+}
+
 function startListening() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    alert('Micro non supporté. Utilisez Chrome sur Android.'); return;
+    showMicHelp('not-supported'); return;
   }
   if (recog) { try { recog.abort(); } catch (e) {} recog = null; }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -6425,8 +6624,12 @@ function startListening() {
       }
       return;
     }
-    if (e.error === 'network') feed('⚠ Connexion requise', 'warn', currentPage);
-    if (e.error === 'not-allowed') feed('⚠ Permission micro refusée — autorisez dans Chrome', 'warn', currentPage);
+    if (e.error === 'network') feed('⚠ Connexion internet requise pour la dictée', 'warn', currentPage);
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      feed('⚠ Permission micro refusée', 'warn', currentPage);
+      setTimeout(() => showMicHelp('denied'), 600);
+    }
+    if (e.error === 'audio-capture') feed('⚠ Aucun micro détecté sur l\'appareil', 'warn', currentPage);
     setMicState('idle');
   };
 

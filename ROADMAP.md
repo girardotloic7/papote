@@ -32,6 +32,20 @@
 - Modifs sur `index.html` et `ROADMAP.md`
 - Commit suggéré : `Tableau de bord : page d'accueil avec stats temps réel`
 
+### 🎤 Expérience micro améliorée (25/04 — bonus iPhone)
+
+**Problème détecté en test sur iPhone :** le code disait "Autorisez le micro dans Chrome" même sur Safari iOS, et iOS ne demandait pas la permission micro de façon claire.
+
+**Corrections apportées :**
+- Détection précise de la plateforme (iOS Safari, iOS Chrome, Android Chrome, Firefox, Brave, etc.)
+- Nouveau popup d'aide micro contextuel (`showMicHelp`) avec instructions adaptées à chaque appareil :
+  - iPhone Safari → Réglages → Safari → Microphone → Autoriser
+  - Android Chrome → cadenas 🔒 dans la barre d'URL
+  - Firefox/Brave → message "navigateur non compatible"
+- Bouton "💡 Le micro ne marche pas ?" visible en permanence sous le micro → déclenche un test manuel qui force le popup natif iOS
+- Suppression du message trompeur "autorisez dans Chrome" (qui s'affichait aussi sur iPhone)
+- Gestion de toutes les erreurs SpeechRecognition : `not-allowed`, `service-not-allowed`, `audio-capture`, `network`
+
 ### ✅ Polish ajouté (25/04 fin de session)
 
 **Numérotation personnalisable**
